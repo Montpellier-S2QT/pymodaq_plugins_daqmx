@@ -109,5 +109,6 @@ class AO_with_clock_DAQmx(QObject):
 
     def received_move_done(self):
         self.locked = False
+        self.clock.close()
         self.ni_card_ready_for_moving.emit()
 

@@ -108,7 +108,8 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
             self.update_tasks()
             self.controller["clock"].start()
         
-        read_data = self.controller["counter"].readCounter(1, counting_time=self.counting_time)
+        read_data = self.controller["counter"].readCounter(1, counting_time=self.counting_time,
+                                                           read_function="")
         data_pl = 1e-3*read_data/self.counting_time  # convert to kcts/s
         self.dte_signal.emit(DataToExport(name='PL',
                                           data=[DataWithAxes(name='PL', data=[data_pl],
