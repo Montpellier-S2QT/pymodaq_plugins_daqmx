@@ -128,6 +128,10 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # The analog output can handle several channels, for the different axis
         self.controller = self.ini_stage_init(old_controller=controller,
                                               new_controller=AO_with_clock_DAQmx())
+        if controller is not None:
+            init=False
+        else:
+            init=True
 
         self.step_size = self.settings.child("step_size").value()
         self.conv_factor = self.settings.child("conv_factor").value()
@@ -149,7 +153,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             self.update_task()
             initialized = True
             info = "NI card based piezo scanner control."
-            self.move_abs(0.0, init=True)  # to avoid bad initial positioning because
+            self.move_abs(0.0, init=init)  # to avoid bad initial positioning because
             # we can't read the actual value from the NI card.
         except Exception as e:
             print(e)

@@ -108,7 +108,8 @@ class AO_with_clock_DAQmx(QObject):
         self.analog.stop()
 
     def received_move_done(self):
-        self.locked = False
-        self.clock.close()
+        #self.locked = False
+        #self.clock.close()
+        self.stop()
         self.ni_card_ready_for_moving.emit()
 
