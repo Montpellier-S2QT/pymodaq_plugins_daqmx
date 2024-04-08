@@ -666,7 +666,7 @@ class DAQmx:
         else:
             raise IOError(f'Insufficient number of samples have been read:{read.value}/{N}')
 
-    def readCounter(self, Nchannels, counting_time=10., read_function="Ex"):
+    def readCounter(self, Nchannels, counting_time=10., read_function="Ex", semi_period=False):
 
         data_counter = np.zeros(Nchannels, dtype='uint32')
         read = PyDAQmx.int32()
@@ -676,15 +676,21 @@ class DAQmx:
                                         data_counter,
                                         Nchannels, PyDAQmx.byref(read), None)
         else:
-            self._task.ReadCounterU32(PyDAQmx.DAQmx_Val_Auto, 2*counting_time,
-                                        data_counter, Nchannels, PyDAQmx.byref(read), None)
+            if semi_period:
+                data_counter = np.zeros((Nchannels, 2), dtype='uint32')
+                self._task.ReadCounterU32(2, 2 * counting_time,
+                                          data_counter, Nchannels*2, PyDAQmx.byref(read), None)
+
+            else:
+                self._task.ReadCounterU32(PyDAQmx.DAQmx_Val_Auto, 2*counting_time,
+                                      data_counter, Nchannels, PyDAQmx.byref(read), None)
             
         self._task.StopTask()
 
-        if read.value == Nchannels:
+        if read.value == 2*Nchannels:
             return data_counter
         else:
-            raise IOError(f'Insufficient number of samples have been read:{read}/{Nchannels}')
+            raise IOError(f'Inconsistent number of samples have been read:{read}/{Nchannels}')
 
     def readDigital(self, Nchannels):
         read = PyDAQmx.int32()
