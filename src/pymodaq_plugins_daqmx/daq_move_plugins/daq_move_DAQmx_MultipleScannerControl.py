@@ -26,10 +26,10 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
          hardware library
 
     """
-    _controller_units = 'nm'  
+    _controller_units = 'm'
     is_multiaxes = True
     axes_names = ['x', 'y', 'z']
-    _epsilon = 10
+    _epsilon = 10.0e-9
 
     params = [ {"title": "Output channel:", "name": "analog_channel",
                 "type": "list", "limits": DAQmx.get_NIDAQ_channels(source_type="Analog_Output")},
@@ -37,14 +37,14 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
                 'limits': DAQmx.get_NIDAQ_channels(source_type='Counter')},
                {"title": "Step size (nm)", "name": "step_size", "type": "float", "value": 100.0},
                {"title": "Step time (ms)", "name": "step_time", "type": "float", "value": 10.0},
-               {"title": "Conversion factor (nm/V)", "name": "conv_factor", "type": "float", "value": 7500.0}
-                ] + comon_parameters_fun(is_multiaxes, axes_names)
+               {"title": "Conversion factor (m/V)", "name": "conv_factor", "type": "float", "value": 7500.0e-9}
+                ] + comon_parameters_fun(is_multiaxes, axes_names, epsilon=_epsilon)
 
     def ini_attributes(self):
         self.controller = None
-        self.step_size = 100.0  # in nm! be careful with the scaling param
+        self.step_size = 100.0e-9  # in nm! be careful with the scaling param
         self.number_steps = 1
-        self.conv_factor = 7500.0
+        self.conv_factor = 7500.0e-9
         self.scanner_channel = None
         self.voltage_list = np.array([0.0])
         self.init_step_index = 0
@@ -81,6 +81,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # convert voltage to position
         pos = voltage * self.conv_factor
         pos = self.get_position_with_scaling(pos)
+
         return pos
 
     def close(self):
@@ -103,7 +104,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             self.controller.clock_channel_name = self.settings.child("clock_channel").value()
             self.update_task()
         elif param.name() == "step_size":
-            self.step_size = param.value()
+            self.step_size = param.value()*1e-9
         elif param.name() == "step_time":
             self.controller.clock_frequency = 1e3 / self.settings.child("step_time").value()  # time give in ms
         elif param.name() == "conv_factor":
@@ -133,7 +134,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         else:
             init=True
 
-        self.step_size = self.settings.child("step_size").value()
+        self.step_size = self.settings.child("step_size").value()*1e-9
         self.conv_factor = self.settings.child("conv_factor").value()
 
         # Step time is given in ms by the user
@@ -170,9 +171,10 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         value: (float) value of the absolute target positioning 
         """
         if value == 0.0:
-            value = 1.0  # using 0.0 creates issues
+            value = 1.0e-9  # using 0.0 creates issues
         value = self.check_bound(value)  # if user checked bounds, the defined bounds are applied here
         self.target_value = value
+
         self.set_position_with_scaling(value)  # apply scaling if the user specified one
         # check if we are already there
         if np.abs(self.current_value - self.target_value) < self._epsilon and not init:
@@ -201,7 +203,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             value = self.check_bound(self.current_value + value) - self.current_value
             self.target_value = value + self.current_value
             if self.target_value == 0.0:
-                self.target_value = 1.0
+                self.target_value = 1.0e-9
             self.set_position_relative_with_scaling(value)
             if not self.controller.locked:
                 self.move_scanner()
@@ -256,6 +258,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             pos_list = np.arange(min(self.current_value, self.target_value),
                                  max(self.current_value, self.target_value)+self.step_size,
                                  self.step_size)
+
             # we need to start from the beginning
             if pos_list[0] != self.current_value:
                 pos_list = pos_list[::-1]
@@ -263,9 +266,10 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             # we ensure that the last value is the target, otherwise we might get caught in a loop
             # if the position goes to target from more than epsilon.
             pos_list[-1] = self.target_value
-            
+
             # convert to voltage
             self.voltage_list = pos_list/self.conv_factor
+
         self.number_steps = len(self.voltage_list)
 
     def move_scanner(self, init=False):

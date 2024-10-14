@@ -687,7 +687,7 @@ class DAQmx:
             
         self._task.StopTask()
 
-        if read.value == 2*Nchannels:
+        if (not semi_period and read.value == Nchannels) or (semi_period and read.value == 2*Nchannels):
             return data_counter
         else:
             raise IOError(f'Inconsistent number of samples have been read:{read}/{Nchannels}')
