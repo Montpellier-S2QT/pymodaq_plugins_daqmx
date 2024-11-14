@@ -8,6 +8,7 @@ from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, \
     Edge, ClockSettings, SemiPeriodCounter, ClockCounter,  TriggerSettings
 
 from PyDAQmx import DAQmx_Val_ContSamps, DAQmx_Val_CurrReadPos, DAQmx_Val_DoNotOverwriteUnreadSamps
+import time
 # DAQmx_Val_DoNotInvertPolarity, DAQmxConnectTerms,
 # DAQmx_Val_FiniteSamps, DAQmx_Val_CurrReadPos, \
 # DAQmx_Val_DoNotOverwriteUnreadSamps
@@ -23,7 +24,7 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
         {"title": "Photon source:", "name": "photon_channel",
          "type": "list", "limits": DAQmx.getTriggeringSources()},
         {"title": "Clock frequency (Hz):", "name": "clock_freq",
-         "type": "float", "value": 100., "default": 100., "min": 1},
+         "type": "float", "value": 200., "default": 200., "min": 1},
         {'title': 'Clock channel:', 'name': 'clock_channel', 'type': 'list',
          'limits': DAQmx.get_NIDAQ_channels(source_type='Counter')}
         ]
@@ -45,6 +46,12 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
         """
         if param.name() == "clock_freq":
             self.counting_time = 1/param.value()
+
+            # Changing the acquisition setting of the NI card
+            self.update_tasks()
+            self.controller["clock"].start()
+            self.controller["counter"].start()
+
         else:
             self.stop()
             self.update_tasks()
@@ -113,6 +120,7 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
                                                            read_function="", semi_period=True)
         # sum up and down time and convert to kcts/s
         data_pl = 1e-3*(read_data[:, ::2]+read_data[:, 1::2])/self.counting_time
+
         data_pl = np.reshape(data_pl, (len(data_pl)))
         self.dte_signal.emit(DataToExport(name='PL',
                                           data=[DataWithAxes(name='PL', data=[data_pl],
@@ -122,6 +130,8 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
     def stop(self):
         """Stop the current grab hardware wise if necessary"""
         self.close()
+        # Allows the connection to be re-openned when the acquisition starts again
+        self.live = False
         self.emit_status(ThreadCommand('Update_Status', ['Acquisition stopped.']))
         return ''
 
