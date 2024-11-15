@@ -8,6 +8,7 @@ from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, \
     Edge, ClockSettings, SemiPeriodCounter, ClockCounter,  TriggerSettings
 
 from PyDAQmx import DAQmx_Val_ContSamps, DAQmx_Val_CurrReadPos, DAQmx_Val_DoNotOverwriteUnreadSamps
+import time
 # DAQmx_Val_DoNotInvertPolarity, DAQmxConnectTerms,
 # DAQmx_Val_FiniteSamps, DAQmx_Val_CurrReadPos, \
 # DAQmx_Val_DoNotOverwriteUnreadSamps
