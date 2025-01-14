@@ -104,12 +104,13 @@ class DAQ_NIDAQmx_Viewer(DAQ_Viewer_base, DAQ_NIDAQmx_base):
             # actions to perform in order to set properly the settings tree options
             self.commit_settings(self.settings.child('NIDAQ_type'))
             for ch in self.config_channels:
-                try:
-                    ch.analog_type = ch.analog_type
-                    ch.termination = ch.termination
-                except:
-                    pass
-                if self.settings.child("devices").value() in ch.name:
+                # Browse AI config
+                if self.settings.child("devices").value() in ch.name and 'ai' in ch.name:
+                    try:
+                        ch.analog_type = ch.analog_type
+                        ch.termination = ch.termination
+                    except:
+                        pass
                     self.settings.child('ai_channels').addNew(ch.name)
                     param = [a for a in self.settings.child('ai_channels').childs if a.opts['title'] == ch.name][0]
                     self.settings.child("ai_channels", param.opts['name'], "ai_type").setValue(ch.analog_type.name)
@@ -144,7 +145,23 @@ class DAQ_NIDAQmx_Viewer(DAQ_Viewer_base, DAQ_NIDAQmx_base):
                                             "thermoc_settings",
                                             "T_max").setValue(ch.value_max)
                         self.settings.child("ai_channels", param.opts['name'], "termination").setValue(
-                            TerminalConfiguration.DEFAULT.name)
+                            TerminalConfiguration.DEFAULT)
+
+                # Browse Counter config
+                elif self.settings.child("devices").value() in ch.name and 'ci' in ch.name:
+                    self.settings.child('counter_settings', 'counter_channels').addNew(ch.name)
+                    param = [a for a in self.settings.child('counter_settings', 'counter_channels').childs
+                             if a.opts['title'] == ch.name][0]
+                    self.settings.child('counter_settings', "counter_channels",
+                                        param.opts['name'],
+                                        "counter_type").setValue(ch.counter_type)
+                    self.settings.child('counter_settings', "counter_channels",
+                                        param.opts['name'],
+                                        "edge").setValue(ch.edge)
+                    self.settings.child('counter_settings', "counter_channels",
+                                        param.opts['name'],
+                                        "count_dir").setValue(ch.count_dir)
+
             info = "Plugin Initialized"
             initialized = True
             logger.info("Detector 0D initialized")
