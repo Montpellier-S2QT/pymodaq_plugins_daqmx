@@ -129,11 +129,14 @@ class AOChannel(AChannel):
 
 
 class Counter(Channel):
-    def __init__(self, edge=Edge.RISING, **kwargs):
+    def __init__(self, edge=Edge.RISING, counter_type=UsageTypeCI.COUNT_EDGES,
+                 count_dir=CountDirection.COUNT_UP, **kwargs):
         super().__init__(**kwargs)
+        assert count_dir in CountDirection
         assert edge in Edge
         self.edge = edge
-        self.counter_type = "Edge Counter"
+        self.counter_type = counter_type
+        self.count_dir = count_dir
 
 
 class ClockCounter(Counter):
