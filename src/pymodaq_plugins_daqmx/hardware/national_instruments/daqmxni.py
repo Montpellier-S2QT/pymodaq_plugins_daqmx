@@ -334,6 +334,21 @@ class DAQmx:
                                                                    value_max=float(ai[ch].get("value_max")),
                                                                    thermo_type=th,
                                                                    ))
+                        elif source == "ci":
+                            ci = config["NIDAQ_Devices", dev, mod, source]
+                            for ch in ci.keys():
+                                name = module_name + "/" + str(ch)
+                                source = ci[ch].get("source")
+                                counter_type = ci[ch].get("counter_type")
+                                edge = ci[ch].get("edge")
+                                count_dir = ci[ch].get("count_direction")
+                                viewer.config_channels.append(Counter
+                                                              (name=name,
+                                                               source=source,
+                                                               counter_type=UsageTypeCI.__getitem__(counter_type),
+                                                               edge=Edge.__getitem__(edge),
+                                                               count_dir=CountDirection.__getitem__(count_dir),
+                                                               ))
             logger.info("Devices from config: {}".format(viewer.config_devices))
             logger.info("Modules from config: {}".format(viewer.config_modules))
             logger.info("Channels from config: {}".format([ch.name for ch in viewer.config_channels]))
@@ -433,12 +448,12 @@ class DAQmx:
                         raise IOError(status)
                 elif channel.source == 'Counter':  # counter
                     try:
-                        if channel.counter_type == "Edge Counter":
+                        if channel.counter_type == UsageTypeCI.COUNT_EDGES:
                             self._task.ci_channels.add_ci_count_edges_chan(channel.name, "",
                                                                            channel.edge, 0,
                                                                            CountDirection.COUNT_UP)
 
-                        elif channel.counter_type == "Clock Output":
+                        elif channel.counter_type == UsageTypeCO.PULSE_FREQUENCY:
                             self._task.co_channels.add_co_pulse_chan_freq(channel.name, "clock task",
                                                                           FrequencyUnits.HZ,
                                                                           Level.LOW,
@@ -446,7 +461,7 @@ class DAQmx:
                                                                           channel.clock_frequency,
                                                                           0.5)
 
-                        elif channel.counter_type == "SemiPeriod Input":
+                        elif channel.counter_type == UsageTypeCI.PULSE_WIDTH_DIGITAL_SEMI_PERIOD:
                             self._task.ci_channels.add_ci_semi_period_chan(channel.name, "counter task",
                                                                            0,  # expected min
                                                                            channel.value_max,  # expected max
