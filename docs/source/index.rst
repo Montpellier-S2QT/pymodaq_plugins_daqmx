@@ -11,6 +11,8 @@ In addition, and they are also meant as examples, it provides actuator plugins w
 
 This documentation is written as a tutorial to guide you when setting up your NI acquisition devices with PyMoDAQ.
 
+**Caution! The 0D and 1D Viewers DAQmx and the Move DAQmx are not working properly. Write your own plugin for your specific needs.**
+
 This plugin is compatible with PymoDAQ 4.
 
 .. toctree::
@@ -19,5 +21,6 @@ This plugin is compatible with PymoDAQ 4.
 
    introduction	 
    user_guide
+   daqmx
    creating_plugin
    

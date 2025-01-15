@@ -25,6 +25,8 @@ Contributors
 ============
 
 * Amelie Jarnac
+* Aurore Finco
+* Sébastien Guerrero  (sebastien.guerrero@insa-lyon.fr)
 
 Instruments
 ===========
@@ -33,16 +35,12 @@ Below is the list of instruments included in this plugin
 Actuators
 +++++++++
 
-* **DAQmx**: Analog output DC, Sinus, Ramp...
+* **DAQmx_MultipleScannerControl**: Control of piezo scanners with an analog output.
 
 Viewer0D
 ++++++++
 
-* **DAQmx**: Analog acquisition, Counting
-
-Viewer1D
-++++++++
-
-* **DAQmx**: Analog acquisition
+* **DAQmx_PLcounter**: Single photon counting
+* **NIDAQmx: Analog Input (current-voltage-temperature), working with cDAQ & DAQ-USB
 
 

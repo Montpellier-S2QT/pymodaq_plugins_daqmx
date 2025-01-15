@@ -105,8 +105,9 @@ class Edge(IntEnum):
 class ClockMode(IntEnum):
     """
     """
-    Finite = PyDAQmx.DAQmx_Val_Rising
-    Continuous = PyDAQmx.DAQmx_Val_Falling
+    Finite = PyDAQmx.DAQmx_Val_FiniteSamps
+    Continuous = PyDAQmx.DAQmx_Val_ContSamps
+
 
     @classmethod
     def names(cls):
@@ -417,7 +418,7 @@ class DAQmx:
             for channel in channels:
                 if channel.source == 'Analog_Input': #analog input
                     if channel.analog_type == "Voltage":
-                        err_code = self._task.CreateAIVoltageChan(channel.name, "analog voltage task",
+                        err_code = self._task.CreateAIVoltageChan(channel.name, "",
                                      DAQ_termination[channel.termination].value,
                                      channel.value_min,
                                      channel.value_max,
