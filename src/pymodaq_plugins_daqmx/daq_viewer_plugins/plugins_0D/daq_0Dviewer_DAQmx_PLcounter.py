@@ -4,10 +4,14 @@ from pymodaq.utils.data import DataWithAxes, DataToExport, DataSource
 from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
 from pymodaq.utils.parameter import Parameter
 
-from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, \
-    Edge, ClockSettings, SemiPeriodCounter, ClockCounter,  TriggerSettings
+#from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, \
+#    Edge, ClockSettings, SemiPeriodCounter, ClockCounter,  TriggerSettings
+from pymodaq_plugins_daqmx.hardware.national_instruments.daqmxni import DAQmx, \
+    Edge, ClockSettings, SemiPeriodCounter, ClockCounter,  TriggerSettings, DAQ_NIDAQ_source
 
-from PyDAQmx import DAQmx_Val_ContSamps, DAQmx_Val_CurrReadPos, DAQmx_Val_DoNotOverwriteUnreadSamps
+from nidaqmx.constants import AcquisitionType, ReadRelativeTo, OverwriteMode
+
+#from PyDAQmx import DAQmx_Val_ContSamps, DAQmx_Val_CurrReadPos, DAQmx_Val_DoNotOverwriteUnreadSamps
 import time
 # DAQmx_Val_DoNotInvertPolarity, DAQmxConnectTerms,
 # DAQmx_Val_FiniteSamps, DAQmx_Val_CurrReadPos, \
@@ -115,8 +119,8 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
             self.controller["clock"].start()
             self.controller["counter"].start()
         
-        read_data = self.controller["counter"].readCounter(1, counting_time=self.counting_time,
-                                                           read_function="", semi_period=True)
+        read_data = self.controller["counter"].readCounter()#1, counting_time=self.counting_time,
+        #read_function="", semi_period=True)
         # sum up and down time and convert to kcts/s
         data_pl = 1e-3*(read_data[:, ::2]+read_data[:, 1::2])/self.counting_time
 
@@ -141,32 +145,24 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
                                           name=self.settings.child("clock_channel").value(),
                                           source="Counter")
         self.counter_channel = SemiPeriodCounter(name=self.settings.child("counter_channel").value(),
-                                       source="Counter", edge=Edge.names()[0], value_max=5e6*self.counting_time/2)
+                                       source="Counter", edge=Edge.RISING, value_max=5e6*self.counting_time/2)
+        self.counter_channel.ci_semi_period_term = "/" + self.clock_channel.name + "InternalOutput"
+        self.counter_channel.ci_ctr_timebase_src = self.settings.child("photon_channel").value()
 
         self.controller["clock"].update_task(channels=[self.clock_channel],
                                              clock_settings=ClockSettings(Nsamples=1),
                                              trigger_settings=TriggerSettings())
-        self.controller["clock"].task.CfgImplicitTiming(DAQmx_Val_ContSamps, 1000)
+        self.controller["clock"].task.timing.cfg_implicit_timing(AcquisitionType.CONTINUOUS, 1000)
 
         
         self.controller["counter"].update_task(channels=[self.counter_channel],
                                                clock_settings=ClockSettings(Nsamples=1),
                                                trigger_settings=TriggerSettings())
 
-        # connect the clock to the counter
-        #self.controller["counter"].task.SetSampClkSrc("/" + self.clock_channel.name
-        #                                              + "InternalOutput")
-        print("/" + self.counter_channel.name,
-              "/" + self.clock_channel.name + "InternalOutput")
-        self.controller["counter"].task.SetCISemiPeriodTerm("/" + self.counter_channel.name,
-                                                            "/" + self.clock_channel.name + "InternalOutput")
-
-        self.controller["counter"].task.SetCICtrTimebaseSrc(self.settings.child("counter_channel").value(),
-                                                            self.settings.child("photon_channel").value())
-        self.controller["counter"].task.CfgImplicitTiming(DAQmx_Val_ContSamps, 1000)
-        self.controller["counter"].task.SetReadRelativeTo(DAQmx_Val_CurrReadPos)
-        self.controller["counter"].task.SetReadOffset(0)
-        self.controller["counter"].task.SetReadOverWrite(DAQmx_Val_DoNotOverwriteUnreadSamps)
+        self.controller["counter"].task.timing.cfg_implicit_timing(AcquisitionType.CONTINUOUS, 1000)
+        self.controller["counter"].task.InStream.relative_to = ReadRelativeTo.CURRENT_READ_POSITION
+        self.controller["counter"].task.InStream.offset = 0
+        self.controller["counter"].task.InStream.overwrite = OverwriteMode.DO_NOT_OVERWRITE_UNREAD_SAMPLES
         
 if __name__ == '__main__':
     main(__file__)
