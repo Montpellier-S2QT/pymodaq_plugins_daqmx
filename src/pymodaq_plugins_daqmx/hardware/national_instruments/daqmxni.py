@@ -334,20 +334,20 @@ class DAQmx:
                                                                    value_max=float(ai[ch].get("value_max")),
                                                                    thermo_type=th,
                                                                    ))
-                        elif source == "ci":
-                            ci = config["NIDAQ_Devices", dev, mod, source]
+                        elif src == "ci":
+                            ci = config["NIDAQ_Devices", dev, mod, src]
                             for ch in ci.keys():
                                 name = module_name + "/" + str(ch)
-                                source = ci[ch].get("source")
-                                counter_type = ci[ch].get("counter_type")
-                                edge = ci[ch].get("edge")
-                                count_dir = ci[ch].get("count_direction")
+                                source = DAQ_NIDAQ_source[ci[ch].get("source")]
+                                counter_type = UsageTypeCI[ci[ch].get("counter_type")]
+                                edge = Edge[ci[ch].get("edge")]
+                                count_dir = CountDirection[ci[ch].get("count_direction")]
                                 viewer.config_channels.append(Counter
                                                               (name=name,
                                                                source=source,
-                                                               counter_type=UsageTypeCI.__getitem__(counter_type),
-                                                               edge=Edge.__getitem__(edge),
-                                                               count_dir=CountDirection.__getitem__(count_dir),
+                                                               counter_type=counter_type,
+                                                               edge=edge,
+                                                               count_dir=count_dir,
                                                                ))
             logger.info("Devices from config: {}".format(viewer.config_devices))
             logger.info("Modules from config: {}".format(viewer.config_modules))
@@ -446,7 +446,7 @@ class DAQmx:
                     if err_code:
                         status = self.DAQmxGetErrorString(err_code)
                         raise IOError(status)
-                elif channel.source == 'Counter':  # counter
+                elif channel.source == DAQ_NIDAQ_source.Counter:  # counter
                     try:
                         if channel.counter_type == UsageTypeCI.COUNT_EDGES:
                             self._task.ci_channels.add_ci_count_edges_chan(channel.name, "",
@@ -541,7 +541,7 @@ class DAQmx:
 
             for channel in channels:
                 if not trigger_settings.enable:
-                    if channel.source == 'Counter':
+                    if channel.source == DAQ_NIDAQ_source.Counter:
                         pass  # Maybe here adding the configuration fastCTr0 with Ctr1 etc...?
                     else:
                         pass
@@ -558,7 +558,7 @@ class DAQmx:
                             trigger_settings.level)
                     else:
                         raise IOError('Unsupported Trigger source')
-            logger.info("Task's channels{}".format(self._task.ai_channels.channel_names))
+            logger.info("Task's channels {}".format(self._task.ai_channels.channel_names))
         except Exception as e:
             logger.error("Exception caught: {}".format(e))
             logger.error(traceback.format_exc())

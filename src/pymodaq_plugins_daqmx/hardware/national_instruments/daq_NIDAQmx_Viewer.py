@@ -148,19 +148,19 @@ class DAQ_NIDAQmx_Viewer(DAQ_Viewer_base, DAQ_NIDAQmx_base):
                             TerminalConfiguration.DEFAULT)
 
                 # Browse Counter config
-                elif self.settings.child("devices").value() in ch.name and 'ci' in ch.name:
+                elif self.settings.child("devices").value() in ch.name and 'ctr' in ch.name:
                     self.settings.child('counter_settings', 'counter_channels').addNew(ch.name)
                     param = [a for a in self.settings.child('counter_settings', 'counter_channels').childs
                              if a.opts['title'] == ch.name][0]
                     self.settings.child('counter_settings', "counter_channels",
                                         param.opts['name'],
-                                        "counter_type").setValue(ch.counter_type)
+                                        "counter_type").setValue(ch.counter_type.name)
                     self.settings.child('counter_settings', "counter_channels",
                                         param.opts['name'],
-                                        "edge").setValue(ch.edge)
+                                        "edge").setValue(ch.edge.name)
                     self.settings.child('counter_settings', "counter_channels",
                                         param.opts['name'],
-                                        "count_dir").setValue(ch.count_dir)
+                                        "count_dir").setValue(ch.count_dir.name)
 
             info = "Plugin Initialized"
             initialized = True
