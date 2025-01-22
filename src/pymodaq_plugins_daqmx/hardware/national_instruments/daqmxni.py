@@ -143,13 +143,13 @@ class ClockCounter(Counter):
     def __init__(self, clock_frequency=100, **kwargs):
         super().__init__(**kwargs)
         self.clock_frequency = clock_frequency
-        self.counter_type = "Clock Output"
+        self.counter_type = UsageTypeCO.PULSE_FREQUENCY
 
 class SemiPeriodCounter(Counter):
     def __init__(self, value_max, **kwargs):
         super().__init__(**kwargs)
         self.value_max = value_max
-        self.counter_type = "SemiPeriod Input"
+        self.counter_type = UsageTypeCI.PULSE_WIDTH_DIGITAL_SEMI_PERIOD
 
 class DigitalChannel(Channel):
     def __init__(self, **kwargs):
