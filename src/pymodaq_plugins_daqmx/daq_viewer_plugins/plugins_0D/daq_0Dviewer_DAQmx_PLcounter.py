@@ -122,9 +122,8 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
 
         read_data = self.controller["counter"].task.read(number_of_samples_per_channel=2)#1, counting_time=self.counting_time,
 
-        # sum up and down time and convert to kcts/s
-        self.emit_status(ThreadCommand('Update_Status', ['Data Output: ' + str(read_data)]))
         try:
+            # sum up and down time and convert to kcts/s
             data_pl = 1e-3*(np.array(read_data)[::2]+np.array(read_data)[1::2])/self.counting_time
 
             data_pl = np.reshape(data_pl, (len(data_pl)))
