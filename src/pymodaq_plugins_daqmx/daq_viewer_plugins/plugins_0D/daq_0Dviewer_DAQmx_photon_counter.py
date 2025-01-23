@@ -18,19 +18,19 @@ import time
 # DAQmx_Val_FiniteSamps, DAQmx_Val_CurrReadPos, \
 # DAQmx_Val_DoNotOverwriteUnreadSamps
 
-class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
+class DAQ_0DViewer_DAQmx_photon_counter(DAQ_Viewer_base):
     """
     Plugin for a 0D PL counter, based on a NI card.
     """
     params = comon_parameters+[
         {"title": "Counting channel:", "name": "counter_channel",
-         "type": "list", "limits": DAQmx.get_NIDAQ_channels(source_type="Counter")},
+         "type": "list", "limits": DAQmx.get_NIDAQ_channels(source_type=DAQ_NIDAQ_source.Counter)},
         {"title": "Photon source:", "name": "photon_channel",
          "type": "list", "limits": DAQmx.getTriggeringSources()},
         {"title": "Clock frequency (Hz):", "name": "clock_freq",
          "type": "float", "value": 200., "default": 200., "min": 1},
         {'title': 'Clock channel:', 'name': 'clock_channel', 'type': 'list',
-         'limits': DAQmx.get_NIDAQ_channels(source_type='Counter')}
+         'limits': DAQmx.get_NIDAQ_channels(source_type=DAQ_NIDAQ_source.Counter)}
         ]
 
     def ini_attributes(self):
