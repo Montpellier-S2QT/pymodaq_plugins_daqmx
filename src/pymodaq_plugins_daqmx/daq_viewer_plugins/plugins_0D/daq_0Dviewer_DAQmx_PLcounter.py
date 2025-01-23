@@ -7,9 +7,10 @@ from pymodaq.utils.parameter import Parameter
 #from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, \
 #    Edge, ClockSettings, SemiPeriodCounter, ClockCounter,  TriggerSettings
 from pymodaq_plugins_daqmx.hardware.national_instruments.daqmxni import DAQmx, \
-    Edge, ClockSettings, SemiPeriodCounter, ClockCounter,  TriggerSettings, DAQ_NIDAQ_source
-
-from nidaqmx.constants import AcquisitionType, ReadRelativeTo, OverwriteMode
+    Edge, ClockSettings, SemiPeriodCounter, ClockCounter,  TriggerSettings, DAQ_NIDAQ_source, \
+    niTask
+from nidaqmx.constants import AcquisitionType, ReadRelativeTo, OverwriteMode, \
+    CountDirection, FrequencyUnits, Level, TimeUnits
 
 #from PyDAQmx import DAQmx_Val_ContSamps, DAQmx_Val_CurrReadPos, DAQmx_Val_DoNotOverwriteUnreadSamps
 import time
@@ -119,9 +120,8 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
             self.controller["clock"].start()
             self.controller["counter"].start()
 
-
         read_data = self.controller["counter"].task.read(number_of_samples_per_channel=2)#1, counting_time=self.counting_time,
-        #read_function="", semi_period=True)
+
         # sum up and down time and convert to kcts/s
         self.emit_status(ThreadCommand('Update_Status', ['Data Output: ' + str(read_data)]))
         try:
@@ -144,32 +144,40 @@ class DAQ_0DViewer_DAQmx_PLcounter(DAQ_Viewer_base):
 
     def update_tasks(self):
         """Set up the counting tasks in the NI card."""
-        # Create channels
-        self.clock_channel = ClockCounter(self.settings.child("clock_freq").value(),
-                                          name=self.settings.child("clock_channel").value(),
-                                          source=DAQ_NIDAQ_source.Counter)
-        self.counter_channel = SemiPeriodCounter(name=self.settings.child("counter_channel").value(),
-                                       source=DAQ_NIDAQ_source.Counter, edge=Edge.RISING, value_max=5e6*self.counting_time/2)
+
+        # Stop the tasks before updating them
+        if self.controller["counter"]._task is not None:
+            if isinstance(self.controller["counter"]._task, niTask):
+                self.controller["counter"]._task.close()
+            self._task = None
+        if self.controller["clock"]._task is not None:
+            if isinstance(self.controller["clock"]._task, niTask):
+                self.controller["clock"]._task.close()
+            self._task = None
 
 
-        self.controller["clock"].update_task(channels=[self.clock_channel],
-                                             clock_settings=ClockSettings(Nsamples=1),
-                                             trigger_settings=TriggerSettings())
+        self.controller["counter"]._task = niTask()
+        channel = self.controller["counter"].task.ci_channels.add_ci_semi_period_chan(
+            self.settings.child("counter_channel").value(),
+            'counter task',
+            units=TimeUnits.TICKS
+        )
 
-        self.controller["counter"].update_task(channels=[self.counter_channel],
-                                               clock_settings=ClockSettings(Nsamples=1),
-                                               trigger_settings=TriggerSettings())
+        self.controller["clock"]._task = niTask()
+        clock_channel = self.controller["clock"].task.co_channels.add_co_pulse_chan_freq(
+            self.settings.child("clock_channel").value(),
+            units=FrequencyUnits.HZ,
+            idle_state=Level.LOW,
+            initial_delay=0,
+            freq=self.settings.child("clock_freq").value(),
+            duty_cycle=0.5,
+
+        )
 
         self.controller["clock"].task.timing.cfg_implicit_timing(AcquisitionType.CONTINUOUS, 1000)
 
-
-        #self.counter_channel.ci_semi_period_term = "/" + self.clock_channel.name + "InternalOutput"
-        #self.counter_channel.ci_ctr_timebase_src = self.settings.child("photon_channel").value()
-
-        self.controller['counter'].task.co_channels['counter task'].ci_semi_period_term = \
-            "/" + self.settings.child("clock_channel").value() + "InternalOutput"
-        self.controller['counter'].task.co_channels[
-            'counter task'].ci_ctr_timebase_src = self.settings.child("photon_channel").value()
+        channel.ci_semi_period_term = "/" + self.settings.child("clock_channel").value() + "InternalOutput"
+        channel.ci_ctr_timebase_src = self.settings.child("photon_channel").value()
 
         self.controller["counter"].task.timing.cfg_implicit_timing(AcquisitionType.CONTINUOUS, 1000)
         self.controller["counter"].task.in_stream.relative_to = ReadRelativeTo.CURRENT_READ_POSITION
