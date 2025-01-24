@@ -92,6 +92,7 @@ class Channel:
         self.name = name
         assert source in DAQ_NIDAQ_source
         self.source = source
+        self.ni_channel = None
 
 
 class AChannel(Channel):
@@ -417,7 +418,7 @@ class DAQmx:
                 if channel.source == DAQ_NIDAQ_source.Analog_Input:  # analog input
                     try:
                         if channel.analog_type == UsageTypeAI.VOLTAGE:
-                            self._task.ai_channels.add_ai_voltage_chan(channel.name,
+                            channel.ni_channel = self._task.ai_channels.add_ai_voltage_chan(channel.name,
                                                                        "",
                                                                        channel.termination,
                                                                        channel.value_min,
@@ -426,7 +427,7 @@ class DAQmx:
                                                                        "")
 
                         elif channel.analog_type == UsageTypeAI.CURRENT:
-                            self._task.ai_channels.add_ai_current_chan(channel.name,
+                            channel.ni_channel = self._task.ai_channels.add_ai_current_chan(channel.name,
                                                                        "",
                                                                        channel.termination,
                                                                        channel.value_min,
@@ -437,7 +438,7 @@ class DAQmx:
                                                                        "")
 
                         elif channel.analog_type == UsageTypeAI.TEMPERATURE_THERMOCOUPLE:
-                            self._task.ai_channels.add_ai_thrmcpl_chan(channel.name,
+                            channel.ni_channel = self._task.ai_channels.add_ai_thrmcpl_chan(channel.name,
                                                                        "",
                                                                        channel.value_min,
                                                                        channel.value_max,
@@ -454,12 +455,12 @@ class DAQmx:
                 elif channel.source == DAQ_NIDAQ_source.Counter:  # counter
                     try:
                         if channel.counter_type == UsageTypeCI.COUNT_EDGES:
-                            self._task.ci_channels.add_ci_count_edges_chan(channel.name, "",
+                            channel.ni_channel = self._task.ci_channels.add_ci_count_edges_chan(channel.name, "",
                                                                            channel.edge, 0,
                                                                            CountDirection.COUNT_UP)
 
                         elif channel.counter_type == UsageTypeCO.PULSE_FREQUENCY:
-                            self._task.co_channels.add_co_pulse_chan_freq(channel.name, "clock task",
+                            channel.ni_channel = self._task.co_channels.add_co_pulse_chan_freq(channel.name, "clock task",
                                                                           FrequencyUnits.HZ,
                                                                           Level.LOW,
                                                                           0,
@@ -467,7 +468,7 @@ class DAQmx:
                                                                           0.5)
 
                         elif channel.counter_type == UsageTypeCI.PULSE_WIDTH_DIGITAL_SEMI_PERIOD:
-                            self._task.ci_channels.add_ci_semi_period_chan(channel.name, "counter task",
+                            channel.ni_channel = self._task.ci_channels.add_ci_semi_period_chan(channel.name, "counter task",
                                                                            0,  # expected min
                                                                            channel.value_max,  # expected max
                                                                            TimeUnits.TICKS, "")
@@ -485,13 +486,13 @@ class DAQmx:
                 elif channel.source == DAQ_NIDAQ_source.Analog_Output:  # Analog_Output
                     try:
                         if channel.analog_type == UsageTypeAI.VOLTAGE:
-                            self._task.ao_channels.add_ao_voltage_chan(channel.name, "",
+                            channel.ni_channel = self._task.ao_channels.add_ao_voltage_chan(channel.name, "",
                                                                        channel.value_min,
                                                                        channel.value_max,
                                                                        VoltageUnits.VOLTS, None)
 
                         elif channel.analog_type == UsageTypeAI.CURRENT:
-                            self._task.ao_channels.add_ao_current_chan(channel.name, "",
+                            channel.ni_channel = self._task.ao_channels.add_ao_current_chan(channel.name, "",
                                                                        channel.value_min,
                                                                        channel.value_max,
                                                                        VoltageUnits.VOLTS, None)
