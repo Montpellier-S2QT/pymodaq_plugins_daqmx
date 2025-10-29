@@ -1,8 +1,8 @@
 from collections import OrderedDict
 import numpy as np
 from qtpy.QtCore import QObject, Signal
-import pymodaq_plugins_daqmx.hardware.national_instruments.daqmx as dq
-from PyDAQmx import DAQmx_Val_FiniteSamps
+import pymodaq_plugins_daqmx.hardware.national_instruments.daqmxni as dq
+from nidaqmx.constants import AcquisitionType
 
 from pymodaq.utils.logger import set_logger, get_module_name
 
@@ -21,7 +21,7 @@ class AO_with_clock_DAQmx(QObject):
         self.analog = dq.DAQmx()
         self.clock_channel_name = ''
         self.clock_channel = None
-        self.clock_frequency = 100.0
+        self.clock_frequency = 1.0
         self.AO_channels = OrderedDict()
         self.num_ch = 0
         self.voltage_array = None
@@ -34,17 +34,18 @@ class AO_with_clock_DAQmx(QObject):
         nb_steps (int) specifies the number of steps there will be in the movement."""
         self.clock_channel = dq.ClockCounter(self.clock_frequency,
                                              name=self.clock_channel_name,
-                                             source="Counter")
+                                             source=dq.DAQ_NIDAQ_source.Counter)
         if self.clock.task is not None:
-            self.clock.task.WaitUntilTaskDone(-1)  # in case another scanner is still moving
+            self.clock.task.wait_until_done(1)  # in case another scanner is still moving
         self.clock.update_task(channels=[self.clock_channel])
         # we need to set the rate again, I do not understand why
-        self.clock.task.SetSampClkRate(self.clock_frequency)
-        self.clock.task.CfgImplicitTiming(DAQmx_Val_FiniteSamps, nb_steps + 1)
+
+        self.clock.task.timing.samp_clk_rate = self.clock_frequency
+        self.clock.task.timing.cfg_implicit_timing(AcquisitionType.FINITE, nb_steps + 1)
 
         clock_settings_ao = dq.ClockSettings(source="/" + self.clock_channel_name + "InternalOutput",
                                              frequency=self.clock_frequency,
-                                             edge=dq.Edge.names()[0],
+                                             edge=dq.Edge.RISING,
                                              Nsamples=nb_steps + 1,
                                              repetition=False)
         self.get_max_ch_nb()
@@ -62,7 +63,7 @@ class AO_with_clock_DAQmx(QObject):
             logger.info("Too many AO channels!")
             return
         if self.clock.task is not None:  # we wait for slow movements
-            self.clock.task.WaitUntilTaskDone(-1)  # in case another scanner is still moving
+            self.clock.task.wait_until_done(1)  # in case another scanner is still moving
         self.analog.update_task(channels=[self.AO_channels[ax] for ax in self.AO_channels.keys()],
                                 clock_settings=clock_settings_ao)
 
@@ -94,12 +95,13 @@ class AO_with_clock_DAQmx(QObject):
                 self.applied_voltages[axes[i]] = self.voltage_array[i, -1]
 
         self.analog.start()
-        self.analog.writeAnalog(nb_steps, self.num_ch, self.voltage_array)
+
+        self.analog.task.write(self.voltage_array)
 
     def get_max_ch_nb(self):
         # get the max number of available AO channels of the device with the clock
         dev = self.clock_channel_name.split('/')[0]
-        chans = self.clock.get_NIDAQ_channels(devices=[dev], source_type="Analog_Output")
+        chans = self.clock.get_NIDAQ_channels(devices=[dev], source_type=dq.DAQ_NIDAQ_source.Analog_Output)
         self.max_ch_nb = len(chans)
 
     def stop(self):

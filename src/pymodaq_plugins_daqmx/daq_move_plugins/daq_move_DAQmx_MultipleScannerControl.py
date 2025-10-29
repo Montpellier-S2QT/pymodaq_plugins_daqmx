@@ -4,12 +4,15 @@ from pymodaq.control_modules.move_utility_classes import DAQ_Move_base, comon_pa
 from pymodaq.utils.daq_utils import ThreadCommand # object used to send info back to the main thread
 from pymodaq.utils.parameter import Parameter
 
-from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx_objects import AO_with_clock_DAQmx
+from pymodaq_plugins_daqmx.hardware.national_instruments.daqmxni_objects import AO_with_clock_DAQmx
 
-from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, AOChannel, \
-    ClockSettings, DAQ_analog_types, Edge
+from pymodaq_plugins_daqmx.hardware.national_instruments.daqmxni import DAQmx, AOChannel, \
+    ClockSettings, Edge, DAQ_NIDAQ_source
 
-import PyDAQmx
+from nidaqmx.constants import UsageTypeAI
+
+import nidaqmx
+
 
 class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
     """Plugin to control a piezo scanners with a NI card. This modules requires a clock channel to handle the
@@ -26,25 +29,25 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
          hardware library
 
     """
-    _controller_units = 'nm'  
+    _controller_units = 'm'
     is_multiaxes = True
     axes_names = ['x', 'y', 'z']
-    _epsilon = 10
+    _epsilon = 10.0e-9
 
     params = [ {"title": "Output channel:", "name": "analog_channel",
-                "type": "list", "limits": DAQmx.get_NIDAQ_channels(source_type="Analog_Output")},
+                "type": "list", "limits": DAQmx.get_NIDAQ_channels(source_type=DAQ_NIDAQ_source.Analog_Output)},
                {'title': 'Clock channel:', 'name': 'clock_channel', 'type': 'list',
-                'limits': DAQmx.get_NIDAQ_channels(source_type='Counter')},
+                'limits': DAQmx.get_NIDAQ_channels(source_type=DAQ_NIDAQ_source.Counter)},
                {"title": "Step size (nm)", "name": "step_size", "type": "float", "value": 100.0},
                {"title": "Step time (ms)", "name": "step_time", "type": "float", "value": 10.0},
-               {"title": "Conversion factor (nm/V)", "name": "conv_factor", "type": "float", "value": 7500.0}
-                ] + comon_parameters_fun(is_multiaxes, axes_names)
+               {"title": "Conversion factor (m/V)", "name": "conv_factor", "type": "float", "value": 7500.0e-9}
+                ] + comon_parameters_fun(is_multiaxes, axes_names, epsilon=_epsilon)
 
     def ini_attributes(self):
         self.controller = None
-        self.step_size = 100.0  # in nm! be careful with the scaling param
+        self.step_size = 100.0e-9  # in nm! be careful with the scaling param
         self.number_steps = 1
-        self.conv_factor = 7500.0
+        self.conv_factor = 7500.0e-9
         self.scanner_channel = None
         self.voltage_list = np.array([0.0])
         self.init_step_index = 0
@@ -67,10 +70,11 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         """
         if len(self.voltage_list) > 1:
             try:
-                current_step_index = PyDAQmx.c_ulong()
-                self.controller.clock.task.GetCOCount(self.controller.clock_channel_name,
-                                                      PyDAQmx.byref(current_step_index))
-                index = self.init_step_index - current_step_index.value
+                #current_step_index = PyDAQmx.c_ulong()
+                #self.controller.clock.task.GetCOCount(self.controller.clock_channel_name,
+                #                                      PyDAQmx.byref(current_step_index))
+                current_step_index = self.controller.clock.task.co_channels.all.co_count
+                index = self.init_step_index - current_step_index
                 voltage = self.voltage_list[min(int(index/2), len(self.voltage_list)-1)]
             except:  # when the task did not start
                 voltage = self.voltage_list[0]
@@ -81,6 +85,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # convert voltage to position
         pos = voltage * self.conv_factor
         pos = self.get_position_with_scaling(pos)
+
         return pos
 
     def close(self):
@@ -103,7 +108,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             self.controller.clock_channel_name = self.settings.child("clock_channel").value()
             self.update_task()
         elif param.name() == "step_size":
-            self.step_size = param.value()
+            self.step_size = param.value()*1e-9
         elif param.name() == "step_time":
             self.controller.clock_frequency = 1e3 / self.settings.child("step_time").value()  # time give in ms
         elif param.name() == "conv_factor":
@@ -128,8 +133,12 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # The analog output can handle several channels, for the different axis
         self.controller = self.ini_stage_init(old_controller=controller,
                                               new_controller=AO_with_clock_DAQmx())
+        if self.controller is not None:
+            init=False
+        else:
+            init=True
 
-        self.step_size = self.settings.child("step_size").value()
+        self.step_size = self.settings.child("step_size").value()*1e-9
         self.conv_factor = self.settings.child("conv_factor").value()
 
         # Step time is given in ms by the user
@@ -149,7 +158,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             self.update_task()
             initialized = True
             info = "NI card based piezo scanner control."
-            self.move_abs(0.0, init=True)  # to avoid bad initial positioning because
+            self.move_abs(0.0, init=init)  # to avoid bad initial positioning because
             # we can't read the actual value from the NI card.
         except Exception as e:
             print(e)
@@ -166,9 +175,10 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         value: (float) value of the absolute target positioning 
         """
         if value == 0.0:
-            value = 1.0  # using 0.0 creates issues
+            value = 1.0e-9  # using 0.0 creates issues
         value = self.check_bound(value)  # if user checked bounds, the defined bounds are applied here
         self.target_value = value
+
         self.set_position_with_scaling(value)  # apply scaling if the user specified one
         # check if we are already there
         if np.abs(self.current_value - self.target_value) < self._epsilon and not init:
@@ -197,7 +207,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             value = self.check_bound(self.current_value + value) - self.current_value
             self.target_value = value + self.current_value
             if self.target_value == 0.0:
-                self.target_value = 1.0
+                self.target_value = 1.0e-9
             self.set_position_relative_with_scaling(value)
             if not self.controller.locked:
                 self.move_scanner()
@@ -221,8 +231,8 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         min_voltage = self.settings.child("bounds", "min_bound").value()/self.conv_factor
         max_voltage = self.settings.child("bounds", "max_bound").value()/self.conv_factor
         self.scanner_channel = AOChannel(name=self.settings.child("analog_channel").value(),
-                                         source="Analog_Output",
-                                         analog_type=DAQ_analog_types.names()[0],
+                                         source= DAQ_NIDAQ_source.Analog_Output,
+                                         analog_type=UsageTypeAI.VOLTAGE,
                                          value_min=min_voltage,
                                          value_max=max_voltage)
 
@@ -235,7 +245,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             clock_settings_ao = ClockSettings(source=None,
                                               frequency=1/self.controller.clock_frequency,
                                               Nsamples=1,
-                                              edge=Edge.names()[0],
+                                              edge=Edge.RISING,
                                               repetition=False)
 
         self.controller.update_ao_channels(self.scanner_channel,
@@ -252,6 +262,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             pos_list = np.arange(min(self.current_value, self.target_value),
                                  max(self.current_value, self.target_value)+self.step_size,
                                  self.step_size)
+
             # we need to start from the beginning
             if pos_list[0] != self.current_value:
                 pos_list = pos_list[::-1]
@@ -259,9 +270,10 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             # we ensure that the last value is the target, otherwise we might get caught in a loop
             # if the position goes to target from more than epsilon.
             pos_list[-1] = self.target_value
-            
+
             # convert to voltage
             self.voltage_list = pos_list/self.conv_factor
+
         self.number_steps = len(self.voltage_list)
 
     def move_scanner(self, init=False):

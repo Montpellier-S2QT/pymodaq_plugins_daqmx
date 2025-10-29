@@ -4,22 +4,21 @@ from pymodaq.control_modules.move_utility_classes import DAQ_Move_base, comon_pa
 from pymodaq.utils.daq_utils import ThreadCommand # object used to send info back to the main thread
 from pymodaq.utils.parameter import Parameter
 
-from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, AOChannel, \
-    ClockSettings, DAQ_analog_types, ClockCounter, Edge
+from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx_objects import AO_with_clock_DAQmx
 
-from PyDAQmx import DAQmx_Val_FiniteSamps
+from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, AOChannel, \
+    ClockSettings, DAQ_analog_types, Edge
 
 import PyDAQmx
 
 
-class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
-    """Plugin to control a piezo scanner with a NI card. This modules requires a clock channel to handle the
-    timing of the movement and display the position. Avoid using several scanners (ie several analog outputs)
-    with a single clock, this creates conflicts in the use of the clock channel. For this purpose, use the module
-    MultipleScannerControl.
+class DAQ_Move_DAQmx_MultipleScannerControlOld(DAQ_Move_base):
+    """Plugin to control a piezo scanners with a NI card. This modules requires a clock channel to handle the
+    timing of the movement and display the position, and this clock channel is shared between the master and
+    the slave daq_move created with this module, to allow smooth movements.
 
     This object inherits all functionality to communicate with PyMoDAQ Module through inheritance via DAQ_Move_base
-    It then implements the particular communication with the instrument
+    It then implements the particular communication with the instrument.
 
     Attributes:
     -----------
@@ -28,10 +27,10 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
          hardware library
 
     """
-    _controller_units = 'nm'  
-    is_multiaxes = False  
-    axes_names = [ ]
-    _epsilon = 10
+    _controller_units = 'm'
+    is_multiaxes = True
+    axes_names = ['x', 'y', 'z']
+    _epsilon = 10.0e-9
 
     params = [ {"title": "Output channel:", "name": "analog_channel",
                 "type": "list", "limits": DAQmx.get_NIDAQ_channels(source_type="Analog_Output")},
@@ -39,20 +38,18 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
                 'limits': DAQmx.get_NIDAQ_channels(source_type='Counter')},
                {"title": "Step size (nm)", "name": "step_size", "type": "float", "value": 100.0},
                {"title": "Step time (ms)", "name": "step_time", "type": "float", "value": 10.0},
-               {"title": "Conversion factor (nm/V)", "name": "conv_factor", "type": "float", "value": 7500.0}
-                ] + comon_parameters_fun(is_multiaxes, axes_names)
+               {"title": "Conversion factor (m/V)", "name": "conv_factor", "type": "float", "value": 7500.0e-9}
+                ] + comon_parameters_fun(is_multiaxes, axes_names, epsilon=_epsilon)
 
     def ini_attributes(self):
         self.controller = None
-        self.clock = None
-        self.step_size = 100.0  # in nm! be careful with the scaling param
-        self.step_time = 10e-3
+        self.step_size = 100.0e-9  # in nm! be careful with the scaling param
         self.number_steps = 1
-        self.conv_factor = 7500.0
-        self.clock_channel = None
+        self.conv_factor = 7500.0e-9
         self.scanner_channel = None
         self.voltage_list = np.array([0.0])
         self.init_step_index = 0
+        self.waiting_to_move = [False, "abs"]
 
     def get_actuator_value(self):
         """Get the current value from the hardware with scaling conversion.
@@ -72,7 +69,8 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
         if len(self.voltage_list) > 1:
             try:
                 current_step_index = PyDAQmx.c_ulong()
-                self.clock.task.GetCOCount(self.clock_channel.name, PyDAQmx.byref(current_step_index))
+                self.controller.clock.task.GetCOCount(self.controller.clock_channel_name,
+                                                      PyDAQmx.byref(current_step_index))
                 index = self.init_step_index - current_step_index.value
                 voltage = self.voltage_list[min(int(index/2), len(self.voltage_list)-1)]
             except:  # when the task did not start
@@ -80,17 +78,18 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
         
         # if we do only one step, we do not care, there is no timing anyway.
         else:
-            voltage = self.controller.get_last_write()
+            voltage = self.controller.applied_voltages[self.settings.child('multiaxes', 'axis').value()]
         # convert voltage to position
         pos = voltage * self.conv_factor
         pos = self.get_position_with_scaling(pos)
+
         return pos
 
     def close(self):
         """ Terminate the communication protocol"""
-        print("move_done received, closing task")
-        self.clock.close()
-        self.controller.close()
+        # This might be brutal if we are controlling another axis at the same time
+        self.controller.clock.close()
+        self.controller.analog.close()
 
     def commit_settings(self, param: Parameter):
         """Apply the consequences of a change of value in the detector settings
@@ -101,15 +100,14 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
             A given parameter (within detector_settings) whose value has been changed by the user
         """
         if param.name() == "analog_channel":
-            self.close()
             self.update_task()
         elif param.name() == "clock_channel":
-            self.close()
+            self.controller.clock_channel_name = self.settings.child("clock_channel").value()
             self.update_task()
         elif param.name() == "step_size":
-            self.step_size = param.value()
+            self.step_size = param.value()*1e-9
         elif param.name() == "step_time":
-            self.step_time = param.value()*1e-3
+            self.controller.clock_frequency = 1e3 / self.settings.child("step_time").value()  # time give in ms
         elif param.name() == "conv_factor":
             self.conv_factor = param.value()
 
@@ -128,22 +126,36 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
         initialized: bool
             False if initialization failed otherwise True
         """
-        self.controller = DAQmx()
-        self.clock = DAQmx()
-        self.step_size = self.settings.child("step_size").value()
-        # Step time is given in ms by the user
-        self.step_time = self.settings.child("step_time").value()*1e-3
+        # we need a clock task and analog output task.
+        # The analog output can handle several channels, for the different axis
+        self.controller = self.ini_stage_init(old_controller=controller,
+                                              new_controller=AO_with_clock_DAQmx())
+        if controller is not None:
+            init=False
+        else:
+            init=True
+
+        self.step_size = self.settings.child("step_size").value()*1e-9
         self.conv_factor = self.settings.child("conv_factor").value()
 
-        # we need to close the clock once the move is done, to free
-        # the counter resource
-        self.move_done_signal.connect(self.close)
+        # Step time is given in ms by the user
+        # Clock channel and step time should only be modified on the master actuator
+        # because the clock is shared. If not master, these parameters are hidden.
+        if self.settings.child("multiaxes", "multi_status").value() == "Master":
+            self.controller.clock_frequency = 1e3 / self.settings.child("step_time").value()  # time give in ms
+            self.controller.clock_channel_name = self.settings.child("clock_channel").value()
+        else:
+            self.settings.child("step_time").hide()
+            self.settings.child("clock_channel").hide()
+
+        self.move_done_signal.connect(self.controller.received_move_done)
+        self.controller.ni_card_ready_for_moving.connect(self.finish_waiting)
         
         try:
             self.update_task()
             initialized = True
             info = "NI card based piezo scanner control."
-            self.move_abs(0.0)  # to avoid bad initial positioning because
+            self.move_abs(0.0, init=init)  # to avoid bad initial positioning because
             # we can't read the actual value from the NI card.
         except Exception as e:
             print(e)
@@ -152,7 +164,7 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
     
         return info, initialized
 
-    def move_abs(self, value):
+    def move_abs(self, value, init=False):
         """ Move the actuator to the absolute target defined by value
 
         Parameters
@@ -160,13 +172,22 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
         value: (float) value of the absolute target positioning 
         """
         if value == 0.0:
-            value = 1.0
-        self.close()
+            value = 1.0e-9  # using 0.0 creates issues
         value = self.check_bound(value)  # if user checked bounds, the defined bounds are applied here
         self.target_value = value
-        value = self.set_position_with_scaling(value)  # apply scaling if the user specified one
-        self.move_scanner()
-        self.emit_status(ThreadCommand('Update_Status', ['Absolute movement.']))
+
+        self.set_position_with_scaling(value)  # apply scaling if the user specified one
+        # check if we are already there
+        if np.abs(self.current_value - self.target_value) < self._epsilon and not init:
+            # already there
+            self.emit_status(ThreadCommand('Update_Status', ['Already there.']))
+            return
+        else:
+            if not self.controller.locked or init:
+                self.move_scanner(init=init)
+                self.emit_status(ThreadCommand('Update_Status', ['Absolute movement.']))
+            else:
+                self.waiting_to_move = [True, "abs"]
 
     def move_rel(self, value):
         """ Move the actuator to the relative target actuator value defined by value
@@ -175,23 +196,32 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
         ----------
         value: (float) value of the relative target positioning
         """
-        self.close()
-        value = self.check_bound(self.current_value + value) - self.current_value
-        self.target_value = value + self.current_value
-        if self.target_value == 0.0:
-            self.target_value = 1.0
-        value = self.set_position_relative_with_scaling(value)
-        self.move_scanner()
-        self.emit_status(ThreadCommand('Update_Status', ['Relative movement.']))
+        if np.abs(value) < self._epsilon:
+            # already there
+            self.emit_status(ThreadCommand('Update_Status', ['Already there.']))
+            return
+        else:
+            value = self.check_bound(self.current_value + value) - self.current_value
+            self.target_value = value + self.current_value
+            if self.target_value == 0.0:
+                self.target_value = 1.0e-9
+            self.set_position_relative_with_scaling(value)
+            if not self.controller.locked:
+                self.move_scanner()
+                self.emit_status(ThreadCommand('Update_Status', ['Relative movement.']))
+            else:
+                self.waiting_to_move = [True, "rel"]
 
     def move_home(self):
         """Do nothing"""
         self.emit_status(ThreadCommand('Update_Status', ['No home position implemented.']))
 
     def stop_motion(self):
-      """Stop the actuator and emits move_done signal"""
-      self.close()
-      self.emit_status(ThreadCommand('Update_Status', ['Motion stopped.']))
+        """Stop the actuator and emits move_done signal"""
+        self.controller.locked = False
+        self.waiting_to_move[0] = False
+        self.controller.stop()
+        self.emit_status(ThreadCommand('Update_Status', ['Motion stopped.']))
 
     def update_task(self):
         """ Set up the analog output task in the NI card, and the clock if necessary."""
@@ -203,32 +233,21 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
                                          value_min=min_voltage,
                                          value_max=max_voltage)
 
-        # If we do more than one step, we need a clock for the time sampling
+        # If we do more than one step, we need the clock for the time sampling
         # because we want a smooth and slow movement.
         if len(self.voltage_list) > 1:
-            self.clock_channel = ClockCounter(1/self.step_time,
-                                              name=self.settings.child("clock_channel").value(),
-                                              source="Counter")
-            self.clock.update_task(channels=[self.clock_channel])
-            # we need to set the rate again, I do not understand why
-            self.clock.task.SetSampClkRate(1/self.step_time) 
-            self.clock.task.CfgImplicitTiming(DAQmx_Val_FiniteSamps, self.number_steps+1)
-           
-            clock_settings_ao = ClockSettings(source="/" + self.clock_channel.name + "InternalOutput",
-                                              frequency=1/self.step_time,
-                                              edge=Edge.names()[0],
-                                              Nsamples=len(self.voltage_list)+1,
-                                              repetition=False)
+            clock_settings_ao = self.controller.set_up_clock(self.number_steps)
         else:
             # empty clock settings if we do only one step
             clock_settings_ao = ClockSettings(source=None,
-                                              frequency=1/self.step_time,
+                                              frequency=1/self.controller.clock_frequency,
                                               Nsamples=1,
                                               edge=Edge.names()[0],
                                               repetition=False)
-            
-        self.controller.update_task(channels=[self.scanner_channel],
-                                    clock_settings=clock_settings_ao)
+
+        self.controller.update_ao_channels(self.scanner_channel,
+                                           self.settings.child('multiaxes', 'axis').value(),
+                                           clock_settings_ao)
 
     def prepare_voltage_list(self):
         """Generates the list of voltages to move smoothly the scanner."""
@@ -240,6 +259,7 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
             pos_list = np.arange(min(self.current_value, self.target_value),
                                  max(self.current_value, self.target_value)+self.step_size,
                                  self.step_size)
+
             # we need to start from the beginning
             if pos_list[0] != self.current_value:
                 pos_list = pos_list[::-1]
@@ -247,26 +267,39 @@ class DAQ_Move_DAQmx_ScannerControl(DAQ_Move_base):
             # we ensure that the last value is the target, otherwise we might get caught in a loop
             # if the position goes to target from more than epsilon.
             pos_list[-1] = self.target_value
-            
+
             # convert to voltage
             self.voltage_list = pos_list/self.conv_factor
+
         self.number_steps = len(self.voltage_list)
 
-    def move_scanner(self):
+    def move_scanner(self, init=False):
         """ Actually moves the scanner. """
         # compute the path
         self.prepare_voltage_list()
+        if not init:
+            self.controller.locked = True
+        # fill with zeros according to the other AO channels in the controller
+        self.controller.set_up_voltage_array(self.voltage_list,
+                                             self.settings.child('multiaxes', 'axis').value())
         # prepare the tasks
         self.update_task()
-        if len(self.voltage_list) > 1:
-            #self.controller.task.SetSampTimingType(DAQmx_Val_SampClk)
-            self.clock.start()
+        if self.number_steps > 1:
+            self.controller.clock.start()
             self.init_step_index = 2*len(self.voltage_list)+1
             
         # Actually tells the NI card to send the list of voltages.
-        self.controller.start()
-        self.controller.writeAnalog(self.number_steps, 1, self.voltage_list)
-            
+        self.controller.write_voltages()
+
+    def finish_waiting(self):
+        if self.waiting_to_move[0]:
+            self.move_scanner()
+            if self.waiting_to_move[1] == "abs":
+                self.emit_status(ThreadCommand('Update_Status', ['Absolute movement.']))
+            elif self.waiting_to_move[1] == "rel":
+                self.emit_status(ThreadCommand('Update_Status', ['Relative movement.']))
+            self.waiting_to_move[0] = False
+
     
 if __name__ == '__main__':
     main(__file__)
