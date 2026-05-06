@@ -13,6 +13,7 @@ class AO_with_clock_DAQmx(QObject):
     """Object used to coordinate the use of several DAQmx by several modules.
     Its main intended use is to control the movement of several scanners (AO chans) with
     the timing given by the same clock channel."""
+
     ni_card_ready_for_moving = Signal()
     def __init__(self):
         QObject.__init__(self)
@@ -110,8 +111,6 @@ class AO_with_clock_DAQmx(QObject):
         self.analog.stop()
 
     def received_move_done(self):
-        #self.locked = False
-        #self.clock.close()
         self.stop()
         self.ni_card_ready_for_moving.emit()
 

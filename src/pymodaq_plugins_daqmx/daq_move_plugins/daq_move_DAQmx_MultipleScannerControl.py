@@ -10,6 +10,7 @@ from pymodaq_plugins_daqmx.hardware.national_instruments.daqmxni import DAQmx, A
     ClockSettings, Edge, DAQ_NIDAQ_source
 
 from nidaqmx.constants import UsageTypeAI
+from qtpy.QtCore import QThread
 
 import nidaqmx
 
@@ -52,6 +53,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         self.voltage_list = np.array([0.0])
         self.init_step_index = 0
         self.waiting_to_move = [False, "abs"]
+        self.moving = False
 
     def get_actuator_value(self):
         """Get the current value from the hardware with scaling conversion.
@@ -70,14 +72,11 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         """
         if len(self.voltage_list) > 1:
             try:
-                #current_step_index = PyDAQmx.c_ulong()
-                #self.controller.clock.task.GetCOCount(self.controller.clock_channel_name,
-                #                                      PyDAQmx.byref(current_step_index))
                 current_step_index = self.controller.clock.task.co_channels.all.co_count
                 index = self.init_step_index - current_step_index
                 voltage = self.voltage_list[min(int(index/2), len(self.voltage_list)-1)]
-            except:  # when the task did not start
-                voltage = self.voltage_list[0]
+            except Exception:
+                voltage = self.voltage_list[-1]
         
         # if we do only one step, we do not care, there is no timing anyway.
         else:
@@ -85,7 +84,6 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # convert voltage to position
         pos = voltage * self.conv_factor
         pos = self.get_position_with_scaling(pos)
-
         return pos
 
     def close(self):
@@ -174,9 +172,15 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         ----------
         value: (float) value of the absolute target positioning 
         """
+        # We can start the motion if the actuaor is lcked because the other scanner is moving
+        # but not if the same scanner is already moving
+        if self.moving:
+            return
+
         if value == 0.0:
             value = 1.0e-9  # using 0.0 creates issues
         value = self.check_bound(value)  # if user checked bounds, the defined bounds are applied here
+
         self.target_value = value
 
         self.set_position_with_scaling(value)  # apply scaling if the user specified one
@@ -199,13 +203,21 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         ----------
         value: (float) value of the relative target positioning
         """
+        # We can start the motion if the actuaor is lcked because the other scanner is moving
+        # but not if the same scanner is already moving
+        if self.moving:
+            return
+
         if np.abs(value) < self._epsilon:
             # already there
             self.emit_status(ThreadCommand('Update_Status', ['Already there.']))
             return
         else:
             value = self.check_bound(self.current_value + value) - self.current_value
-            self.target_value = value + self.current_value
+            if self.controller.locked:
+                self.target_value = value + self.target_value
+            else:
+                self.target_value = value + self.current_value
             if self.target_value == 0.0:
                 self.target_value = 1.0e-9
             self.set_position_relative_with_scaling(value)
@@ -260,7 +272,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # otherwise we do steps
         else:
             pos_list = np.arange(min(self.current_value, self.target_value),
-                                 max(self.current_value, self.target_value)+self.step_size,
+                                 max(self.current_value, self.target_value),
                                  self.step_size)
 
             # we need to start from the beginning
@@ -279,6 +291,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
     def move_scanner(self, init=False):
         """ Actually moves the scanner. """
         # compute the path
+        self.moving=True
         self.prepare_voltage_list()
         if not init:
             self.controller.locked = True
@@ -295,7 +308,9 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         self.controller.write_voltages()
 
     def finish_waiting(self):
-        if self.waiting_to_move[0]:
+         self.moving = False
+         if self.waiting_to_move[0]:
+            QThread.msleep(10)
             self.move_scanner()
             if self.waiting_to_move[1] == "abs":
                 self.emit_status(ThreadCommand('Update_Status', ['Absolute movement.']))
