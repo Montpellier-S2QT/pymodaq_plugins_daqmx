@@ -90,12 +90,11 @@ class DAQ_Move_DAQmx_SimpleAnalogOutput(DAQ_Move_base):
             self.update_task()
             initialized = True
             info = "NI card based DC analog write."
-            self.move_abs(0.0)  # to avoid bad initial positioning because
+            self.move_abs(0.01)  # to avoid bad initial positioning because
             # we can't read the actual value from the NI card.
         except Exception as e:
-            print(e)
             initialized = False
-            info = "Error"
+            info = e
     
         return info, initialized
 
@@ -155,7 +154,7 @@ class DAQ_Move_DAQmx_SimpleAnalogOutput(DAQ_Move_base):
 
         # Actually tells the NI card to send the voltage.
         self.controller.start()
-        self.controller.writeAnalog(1, 1, value)
+        self.controller.writeAnalog(1, 1, np.array([value]))
             
     
 if __name__ == '__main__':
