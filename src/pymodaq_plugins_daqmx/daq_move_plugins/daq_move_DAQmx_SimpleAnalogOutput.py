@@ -105,7 +105,6 @@ class DAQ_Move_DAQmx_SimpleAnalogOutput(DAQ_Move_base):
         ----------
         value: (float) value of the absolute target positioning 
         """
-        self.close()
         value = self.check_bound(value)  # if user checked bounds, the defined bounds are applied here
         self.target_value = value
         value = self.set_position_with_scaling(value)  # apply scaling if the user specified one
@@ -119,7 +118,6 @@ class DAQ_Move_DAQmx_SimpleAnalogOutput(DAQ_Move_base):
         ----------
         value: (float) value of the relative target positioning
         """
-        self.close()
         value = self.check_bound(self.current_value + value) - self.current_value
         self.target_value = value + self.current_value
         target = self.set_position_with_scaling(self.target_value)
@@ -155,6 +153,7 @@ class DAQ_Move_DAQmx_SimpleAnalogOutput(DAQ_Move_base):
         # Actually tells the NI card to send the voltage.
         self.controller.start()
         self.controller.writeAnalog(1, 1, np.array([value]))
+        self.close()
             
     
 if __name__ == '__main__':
