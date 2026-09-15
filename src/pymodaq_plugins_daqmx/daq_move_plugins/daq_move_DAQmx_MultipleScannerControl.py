@@ -1,8 +1,11 @@
 import numpy as np
+from time import perf_counter
 from pymodaq.control_modules.move_utility_classes import DAQ_Move_base, comon_parameters_fun, main  # common set of
 # parameters for all actuators
 from pymodaq.utils.daq_utils import ThreadCommand # object used to send info back to the main thread
 from pymodaq.utils.parameter import Parameter
+from pymodaq.control_modules.thread_commands import ThreadStatus
+from pymodaq_utils.logger import set_logger, get_module_name
 
 from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx_objects import AO_with_clock_DAQmx
 
@@ -10,6 +13,8 @@ from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, AOC
     ClockSettings, DAQ_analog_types, Edge
 
 import PyDAQmx
+
+logger = set_logger(get_module_name(__file__))
 
 
 class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
@@ -183,6 +188,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             else:
                 self.waiting_to_move = [True, "abs"]
 
+
     def move_rel(self, value):
         """ Move the actuator to the relative target actuator value defined by value
 
@@ -205,6 +211,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
                 self.emit_status(ThreadCommand('Update_Status', ['Relative movement.']))
             else:
                 self.waiting_to_move = [True, "rel"]
+
 
     def move_home(self):
         """Do nothing"""
@@ -267,6 +274,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
 
     def move_scanner(self, init=False):
         """ Actually moves the scanner. """
+
         # compute the path
         self.prepare_voltage_list()
         if not init:
@@ -283,6 +291,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # Actually tells the NI card to send the list of voltages.
         self.controller.write_voltages()
 
+
     def finish_waiting(self):
         if self.waiting_to_move[0]:
             self.move_scanner()
@@ -292,6 +301,32 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
                 self.emit_status(ThreadCommand('Update_Status', ['Relative movement.']))
             self.waiting_to_move[0] = False
 
+    # def check_target_reached(self):
+    #     #override from DAQ_move_base to stop task and unlock controller after move is done
+    #     logger.debug(f"epsilon value is {self.epsilon}")
+    #     logger.debug(f"current_value value is {self._current_value}")
+    #     logger.debug(f"target_value value is {self._target_value}")
+    #
+    #     if not self._condition_to_reach_target():
+    #
+    #         logger.debug(f'Check move_is_done: {self.move_is_done}')
+    #         if self.move_is_done:
+    #             self.emit_status(ThreadCommand(ThreadStatus.UPDATE_STATUS, 'Move has been stopped'))
+    #             logger.info('Move has been stopped')
+    #         self.current_value = self.get_actuator_value()
+    #         self.emit_value(self._current_value)
+    #         logger.debug(f'Current value: {self._current_value}')
+    #
+    #         if perf_counter() - self.start_time >= self.settings['timeout']:
+    #             self.poll_timer.stop()
+    #             self.emit_status(ThreadCommand(ThreadStatus.RAISE_TIMEOUT))
+    #             logger.info('Timeout activated')
+    #     else:
+    #         self.poll_timer.stop()
+    #         self.current_value = self.get_actuator_value()
+    #         logger.debug(f'Current value: {self._current_value}')
+    #         self.controller.stop()
+    #         self.move_done(self._current_value)
     
 if __name__ == '__main__':
     main(__file__)

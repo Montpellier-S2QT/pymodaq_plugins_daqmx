@@ -1,15 +1,18 @@
 import numpy as np
+from time import perf_counter
 from pymodaq.control_modules.move_utility_classes import DAQ_Move_base, comon_parameters_fun, main  # common set of
 # parameters for all actuators
 from pymodaq.utils.daq_utils import ThreadCommand # object used to send info back to the main thread
 from pymodaq.utils.parameter import Parameter
+from pymodaq.control_modules.thread_commands import ThreadStatus
+from pymodaq_utils.logger import set_logger, get_module_name
 
 from pymodaq_plugins_daqmx.hardware.national_instruments.daqmx import DAQmx, AOChannel, \
-    DAQ_analog_types, Edge
+    DAQ_analog_types
 
 from PyDAQmx import DAQmx_Val_FiniteSamps
 
-import PyDAQmx
+logger = set_logger(get_module_name(__file__))
 
 
 class DAQ_Move_DAQmx_SimpleAnalogOutput(DAQ_Move_base):
@@ -130,7 +133,8 @@ class DAQ_Move_DAQmx_SimpleAnalogOutput(DAQ_Move_base):
 
     def stop_motion(self):
       """Stop the actuator and emits move_done signal"""
-      self.close()
+      self.controller.locked = False
+      self.controller.stop()
       self.emit_status(ThreadCommand('Update_Status', ['Motion stopped.']))
 
     def update_task(self):
@@ -147,13 +151,42 @@ class DAQ_Move_DAQmx_SimpleAnalogOutput(DAQ_Move_base):
 
     def move_voltage(self, value):
         """ Changes output voltage to specified value """
+
         # prepare the tasks
         self.update_task()
 
         # Actually tells the NI card to send the voltage.
         self.controller.start()
         self.controller.writeAnalog(1, 1, np.array([value]))
-        self.close()
+
+
+    def check_target_reached(self):
+        #override from DAQ_move_base to stop task and unlock controller after move is done
+        logger.debug(f"epsilon value is {self.epsilon}")
+        logger.debug(f"current_value value is {self._current_value}")
+        logger.debug(f"target_value value is {self._target_value}")
+
+        if not self._condition_to_reach_target():
+
+            logger.debug(f'Check move_is_done: {self.move_is_done}')
+            if self.move_is_done:
+                self.emit_status(ThreadCommand(ThreadStatus.UPDATE_STATUS, 'Move has been stopped'))
+                logger.info('Move has been stopped')
+            self.current_value = self.get_actuator_value()
+            self.emit_value(self._current_value)
+            logger.debug(f'Current value: {self._current_value}')
+
+            if perf_counter() - self.start_time >= self.settings['timeout']:
+                self.poll_timer.stop()
+                self.emit_status(ThreadCommand(ThreadStatus.RAISE_TIMEOUT))
+                logger.info('Timeout activated')
+        else:
+            self.poll_timer.stop()
+            self.current_value = self.get_actuator_value()
+            logger.debug(f'Current value: {self._current_value}')
+            self.controller.locked = False
+            self.controller.stop()
+            self.move_done(self._current_value)
             
     
 if __name__ == '__main__':
