@@ -36,6 +36,7 @@ Actuators
 +++++++++
 
 * **DAQmx_MultipleScannerControl**: Control of piezo scanners with an analog output.
+* **DAQmx_SimpleAnalogOutput**: Control of a single analog output.
 
 Viewer0D
 ++++++++
