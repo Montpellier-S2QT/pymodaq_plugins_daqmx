@@ -42,7 +42,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
                {"title": "Step size (nm)", "name": "step_size", "type": "float", "value": 100.0},
                {"title": "Step time (ms)", "name": "step_time", "type": "float", "value": 10.0},
                {"title": "Conversion factor (m/V)", "name": "conv_factor", "type": "float", "value": 7500.0e-9}
-                ] + comon_parameters_fun(is_multiaxes, axes_names, epsilon=_epsilon)
+                ] + comon_parameters_fun(is_controller, axes_names, epsilon=_epsilon)
 
     def ini_attributes(self):
         self.controller = None
@@ -80,7 +80,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         
         # if we do only one step, we do not care, there is no timing anyway.
         else:
-            voltage = self.controller.applied_voltages[self.settings.child('multiaxes', 'axis').value()]
+            voltage = self.controller.applied_voltages[self.settings.child('controller', 'axis').value()]
         # convert voltage to position
         pos = voltage * self.conv_factor
         pos = self.get_position_with_scaling(pos)
@@ -142,7 +142,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # Step time is given in ms by the user
         # Clock channel and step time should only be modified on the master actuator
         # because the clock is shared. If not master, these parameters are hidden.
-        if self.settings.child("multiaxes", "multi_status").value() == "Master":
+        if self.settings.child("controller", "multi_status").value() == "Master":
             self.controller.clock_frequency = 1e3 / self.settings.child("step_time").value()  # time give in ms
             self.controller.clock_channel_name = self.settings.child("clock_channel").value()
         else:
@@ -261,7 +261,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
                                               repetition=False)
 
         self.controller.update_ao_channels(self.scanner_channel,
-                                           self.settings.child('multiaxes', 'axis').value(),
+                                           self.settings.child('controller', 'axis').value(),
                                            clock_settings_ao)
 
     def prepare_voltage_list(self):
@@ -297,7 +297,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
             self.controller.locked = True
         # fill with zeros according to the other AO channels in the controller
         self.controller.set_up_voltage_array(self.voltage_list,
-                                             self.settings.child('multiaxes', 'axis').value())
+                                             self.settings.child('controller', 'axis').value())
         # prepare the tasks
         self.update_task()
         if self.number_steps > 1:
