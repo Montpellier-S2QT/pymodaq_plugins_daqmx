@@ -42,7 +42,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
                {"title": "Step size (nm)", "name": "step_size", "type": "float", "value": 100.0},
                {"title": "Step time (ms)", "name": "step_time", "type": "float", "value": 10.0},
                {"title": "Conversion factor (m/V)", "name": "conv_factor", "type": "float", "value": 7500.0e-9}
-                ] + comon_parameters_fun(is_controller, axes_names, epsilon=_epsilon)
+                ] + comon_parameters_fun(is_multiaxes, axes_names, epsilon=_epsilon)
 
     def ini_attributes(self):
         self.controller = None
@@ -142,7 +142,7 @@ class DAQ_Move_DAQmx_MultipleScannerControl(DAQ_Move_base):
         # Step time is given in ms by the user
         # Clock channel and step time should only be modified on the master actuator
         # because the clock is shared. If not master, these parameters are hidden.
-        if self.settings.child("controller", "multi_status").value() == "Master":
+        if self.settings.child("controller", "controller_status").value() == "Master":
             self.controller.clock_frequency = 1e3 / self.settings.child("step_time").value()  # time give in ms
             self.controller.clock_channel_name = self.settings.child("clock_channel").value()
         else:
