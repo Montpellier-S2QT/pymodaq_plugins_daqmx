@@ -403,6 +403,10 @@ class DAQ_NIDAQmx_base:
 
     def update_task(self):
         self.channels = self.get_channels_from_settings()
+        print("========== DEBUG NIDAQ ==========")
+        print("Channels:", self.channels)
+        print("Number of channels:", len(self.channels))
+        print("================================")
         self.clock_settings = ClockSettings(frequency=self.settings['clock_settings', 'frequency'],
                                             Nsamples=self.settings['clock_settings', 'Nsamples'],
                                             edge=Edge.RISING,
@@ -413,6 +417,10 @@ class DAQ_NIDAQmx_base:
                             edge=Edge[self.settings['trigger_settings', 'edge']],
                             level=self.settings['trigger_settings', 'level'], )
         if self.channels:
+            for ch in self.channels:
+                print("CHANNEL NAME:", repr(ch.name))
+                print("CHANNEL SOURCE:", ch.source)
+                print("CHANNEL TYPE:", ch.analog_type)
             self.controller.update_task(self.channels, self.clock_settings, trigger_settings=self.trigger_settings)
 
     def get_channels_from_settings(self):
@@ -420,31 +428,31 @@ class DAQ_NIDAQmx_base:
         if self.settings['NIDAQ_type'] == ChannelType.ANALOG_INPUT.name:  # analog input
             source = ChannelType.ANALOG_INPUT
             for channel in self.settings.child('ai_channels').children():
-                analog_type = UsageTypeAI[channel['ai_type']]
+                analog_type = UsageTypeAI[channel['ai_type'].upper()]
                 if analog_type == UsageTypeAI.VOLTAGE:
                     channels.append(AIChannel(name=channel.opts['title'],
                                               source=source, analog_type=analog_type,
                                               value_min=channel['voltage_settings', 'volt_min'],
                                               value_max=channel['voltage_settings', 'volt_max'],
-                                              termination=TerminalConfiguration[channel['termination']], ))
+                                              termination=TerminalConfiguration[channel['termination'].upper()], ))
                 elif analog_type == UsageTypeAI.CURRENT:
                     channels.append(AIChannel(name=channel.opts['title'],
                                               source=source, analog_type=analog_type,
                                               value_min=channel['current_settings', 'curr_min'],
                                               value_max=channel['current_settings', 'curr_max'],
-                                              termination=TerminalConfiguration[channel['termination']], ))
+                                              termination=TerminalConfiguration[channel['termination'].upper()], ))
                 elif analog_type == UsageTypeAI.TEMPERATURE_THERMOCOUPLE:
                     channels.append(AIThermoChannel(name=channel.opts['title'],
                                                     source=source, analog_type=analog_type,
                                                     value_min=channel['thermoc_settings', 'T_min'],
                                                     value_max=channel['thermoc_settings', 'T_max'],
                                                     thermo_type=ThermocoupleType[
-                                                        channel['thermoc_settings', 'thermoc_type']], ))
+                                                        channel['thermoc_settings', 'thermoc_type'].upper()], ))
 
         elif self.settings['NIDAQ_type'] == ChannelType.ANALOG_OUTPUT.name:  # analog output
             source = ChannelType.ANALOG_OUTPUT
             for channel in self.settings.child('ao_channels').children():
-                analog_type = UsageTypeAO[channel['ao_type']]
+                analog_type = UsageTypeAO[channel['ao_type'].upper()]
                 channels.append(AOChannel(name=channel.opts['title'],
                                           source=source, analog_type=analog_type,
                                           value_min=channel['voltage_settings', 'volt_min'],

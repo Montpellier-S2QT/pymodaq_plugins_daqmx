@@ -538,6 +538,10 @@ class NIDAQmx:
 
     def register_callback(self, callback, event='done', nsamples=1):
 
+        print("========== DEBUG TASK ==========")
+        print("Task:", self._task)
+        print("Channel names:", self._task.channel_names)
+        print("================================")
         if event == 'done':
             self._task.register_done_event(callback)
         elif event == 'sample':
