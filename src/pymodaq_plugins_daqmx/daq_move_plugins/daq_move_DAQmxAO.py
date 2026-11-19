@@ -13,12 +13,8 @@ AO_CHANNELS = NIDAQmx.get_NIDAQ_channels(source_type=ChannelType.ANALOG_OUTPUT)
 
 
 class DAQ_Move_DAQmxAO(DAQ_Move_base):
-    """A quantity driven by an analog output of a NI device, changed by voltage ramps.
+    """Static analog output of a NI device.
 
-    The value is the output voltage times a conversion factor (nm/V). A move is a succession of steps of
-    `step_size` taking each `step_time`, timed by a counter used as a clock. Several outputs (axes x, y, z) can be
-    moved with one clock: the first axis created is the master and owns the clock, give to the others the same
-    controller ID.
     """
     _controller_units = 'V'
     is_multiaxes = False

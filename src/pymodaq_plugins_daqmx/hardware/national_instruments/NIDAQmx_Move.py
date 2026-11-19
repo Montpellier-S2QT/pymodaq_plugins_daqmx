@@ -137,11 +137,11 @@ class DAQ_NIDAQmx_Actuator(DAQ_Move_base, DAQ_NIDAQmx_base):
         position: (flaot) value of the absolute target positioning
         """
         ## TODO: Reimplement in your daq_move with NIDAQmx library
-        value = self.check_bound(value)
-        self.target_value = value
-        value = self.set_position_with_scaling(value)
-        self.controller.update_task(task_channels, ClockSettings(Nsamples=1))
-        self.controller.task.write(value.value)
+        raise NotImplementedError
+
+    def move_done_callback(self, taskhandle, status, callbackdata):
+        ## TODO: Reimplement in your daq_move with NIDAQmx library
+        raise NotImplementedError
 
     def move_Rel(self, position):
         """ Move the actuator to the relative target actuator value defined by position
